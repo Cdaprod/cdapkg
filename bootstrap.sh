@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+CDAPROD_HOME="$INSTALL_PATH"
 REPO_URL="https://github.com/Cdaprod/cdapkg"
 INSTALL_PATH="/usr/local/cdaprod"
 INVOKER="${SUDO_USER:-$USER}"

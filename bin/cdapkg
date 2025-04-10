@@ -36,12 +36,16 @@ case "${1:-}" in
       echo "[*] Listing everything..."
       tree "$CDAPROD_HOME/tools"
     else
-      # same logic as above
+      echo "Searching for: $2"
+      find "$CDAPROD_HOME/tools" -type d -name "*$2*" || echo "No match found."
     fi
     ;;
   status)
     echo "Cdaprod Ecosystem Installed Tools:"
     tree "$CDAPROD_HOME/tools"
+    ;;
+  version)
+    echo "cdapkg $(git -C "$CDAPROD_HOME" rev-parse --short HEAD 2>/dev/null || echo 'unknown')"
     ;;
   motd)
     bash "$CDAPROD_HOME/init.d/99_motd.sh"
