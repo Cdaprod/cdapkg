@@ -19,12 +19,12 @@ if ! command -v make >/dev/null 2>&1; then
         sudo apk add make
         ;;
       *)
-        echo "[!] Unsupported distro: $ID. Install 'make' manually." >&2
+        echo "[!] Unsupported distro: $ID. Please install 'make' manually." >&2
         exit 1
         ;;
     esac
   else
-    echo "[!] Cannot detect OS type. Install 'make' manually." >&2
+    echo "[!] Cannot detect OS type. Please install 'make' manually." >&2
     exit 1
   fi
 else
