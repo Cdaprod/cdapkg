@@ -101,18 +101,38 @@ case "${1:-}" in
   
   lock)
     MANIFEST="$CDAPROD_HOME/manifest.txt"
-    echo "[*] Generating manifest of installed tools..."
-    echo "Tool Manifest generated on $(date)" > "$MANIFEST"
+    echo "[*] Generating short manifest..."
+    echo "# cdapkg tool manifest ($(date))" > "$MANIFEST"
+
     for tool in "$CDAPROD_HOME/tools/"*/; do
       TOOLNAME=$(basename "$tool")
-      if [ -d "$tool/.git" ]; then
-          REV=$(git -C "$tool" rev-parse --short HEAD)
-          echo "$TOOLNAME: $REV" >> "$MANIFEST"
-      else
-          echo "$TOOLNAME: (no git info)" >> "$MANIFEST"
+      REV=$(git -C "$tool" rev-parse --short HEAD 2>/dev/null || echo "unknown")
+      echo "$TOOLNAME (cdapkg): $REV" >> "$MANIFEST"
+    done
+
+    echo >> "$MANIFEST"
+    echo "# unmanaged binaries in \$CDAPROD_HOME/bin" >> "$MANIFEST"
+
+    for bin_path in "$CDAPROD_HOME/bin/"*; do
+      TOOLNAME=$(basename "$bin_path")
+      TOOLDIR="$CDAPROD_HOME/tools/$TOOLNAME"
+
+      if [ ! -d "$TOOLDIR" ]; then
+        HASH=$(sha256sum "$bin_path" | awk '{print $1}')
+        DESC=""
+
+        for flag in "--version" "-v" "--help" "-h"; do
+          if output=$("$bin_path" $flag 2>/dev/null | head -n1); then
+            [[ -n "$output" ]] && DESC="$output" && break
+          fi
+        done
+
+        [[ -z "$DESC" ]] && DESC="(unknown signature)"
+        echo "$TOOLNAME (external): $HASH | $DESC" >> "$MANIFEST"
       fi
     done
-    echo "[+] Manifest written to $MANIFEST"
+
+    echo "[+] Short manifest saved: $MANIFEST"
     ;;
   
   doctor)
