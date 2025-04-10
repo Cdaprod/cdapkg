@@ -1,0 +1,52 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+export CDAPROD_HOME="/usr/local/cdaprod"
+source "$CDAPROD_HOME/init.d/00_env.sh"
+
+function usage() {
+  echo "cdapkg: bootstrap and manage the Cdaprod ecosystem"
+  echo "Usage: cdapkg <command>"
+  echo
+  echo "Commands:"
+  echo "  init           Initialize all tools and symlinks"
+  echo "  install NAME   Install a specific tool (repocate, cdaprodctl, etc)"
+  echo "  list           List all installed and managed tools"
+  echo "  status         Show system-level status of toolchain"
+  echo "  motd           Show system message and ecosystem health"
+  echo
+}
+
+case "${1:-}" in
+  init)
+    for f in "$CDAPROD_HOME/init.d/"*.sh; do bash "$f"; done
+    ;;
+  install)
+    shift
+    TOOL="$1"
+    echo "Installing $TOOL..."
+    git clone "https://github.com/Cdaprod/$TOOL" "$CDAPROD_HOME/tools/$TOOL"
+    make -C "$CDAPROD_HOME/tools/$TOOL" install
+    ;;
+  list)
+    find "$CDAPROD_HOME/bin" -type l
+    ;;
+  search)
+    if [[ "$2" == "--all" ]]; then
+      echo "[*] Listing everything..."
+      tree "$CDAPROD_HOME/tools"
+    else
+      # same logic as above
+    fi
+    ;;
+  status)
+    echo "Cdaprod Ecosystem Installed Tools:"
+    tree "$CDAPROD_HOME/tools"
+    ;;
+  motd)
+    bash "$CDAPROD_HOME/init.d/99_motd.sh"
+    ;;
+  *)
+    usage
+    ;;
+esac

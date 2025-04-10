@@ -1,0 +1,114 @@
+#!/usr/bin/env bash
+
+export XDG_RUNTIME_DIR=/run/user/1000
+export WAYLAND_DISPLAY=wayland-0
+export DISPLAY=:0
+
+SESSION="wfstream"
+OUTPUT_MODE="${2:-hls}"
+HLS_DIR="/dev/shm/hls"
+HLS_PORT="8080"
+STREAM_PORT="8090"
+LOG_FILE="/tmp/streamctl.log"
+FIFO="/tmp/wf-stream.fifo"
+
+# Get display ID from wlr-randr
+DISPLAY_ID=$(wlr-randr | awk '/^[^ ]/ {id=$1} /Enabled: yes/ {print id}' | head -n1)
+
+if [ -z "$DISPLAY_ID" ]; then
+  echo "❌ No valid display output found."
+  exit 1
+fi
+
+ensure_fifo() {
+  [ -p "$FIFO" ] || mkfifo "$FIFO"
+}
+
+start_hls() {
+  mkdir -p "$HLS_DIR"
+  ensure_fifo
+  echo "Starting HLS stream: http://$(hostname -I | awk '{print $1}'):$HLS_PORT/stream.m3u8"
+
+  tmux new-session -d -s "$SESSION" bash -c "
+    wf-recorder -o \"$DISPLAY_ID\" -m matroska -f \"$FIFO\" &
+    ffmpeg -nostdin -y -f matroska -i \"$FIFO\" \
+      -c:v libx264 -preset ultrafast -tune zerolatency \
+      -f hls -hls_time 2 -hls_list_size 5 -hls_flags delete_segments \
+      -hls_segment_filename \"${HLS_DIR}/stream_%03d.ts\" \
+      \"${HLS_DIR}/stream.m3u8\" 2>&1 | tee \"${LOG_FILE}\"
+  "
+
+  sleep 1
+  fuser -k ${HLS_PORT}/tcp > /dev/null 2>&1 || true
+
+  tmux new-session -d -s "${SESSION}_http" bash -c "
+    cd \"${HLS_DIR}\"
+    exec python3 -m http.server ${HLS_PORT} >> \"${LOG_FILE}\" 2>&1
+  "
+}
+
+start_mjpeg() {
+  ensure_fifo
+  echo "Starting MJPEG stream: http://$(hostname -I | awk '{print $1}'):$STREAM_PORT/"
+
+  tmux new-session -d -s "$SESSION" bash -c "
+    wf-recorder -o \"$DISPLAY_ID\" -m matroska -f \"$FIFO\" &
+    ffmpeg -nostdin -y -f matroska -i \"$FIFO\" \
+      -c:v mjpeg -f mjpeg http://0.0.0.0:${STREAM_PORT}/ 2>&1 | tee \"${LOG_FILE}\"
+  "
+}
+
+start_rtsp() {
+  ensure_fifo
+  echo "Starting RTSP stream: rtsp://$(hostname -I | awk '{print $1}'):8554/live.stream"
+
+  tmux new-session -d -s "$SESSION" bash -c "
+    wf-recorder -o \"$DISPLAY_ID\" -m matroska -f \"$FIFO\" &
+    ffmpeg -nostdin -y -f matroska -i \"$FIFO\" \
+      -c:v libx264 -preset ultrafast -tune zerolatency \
+      -f rtsp rtsp://0.0.0.0:8554/live.stream 2>&1 | tee \"${LOG_FILE}\"
+  "
+}
+
+case "$1" in
+  start)
+    if tmux has-session -t "$SESSION" 2>/dev/null; then
+      echo "Stream already running."
+      exit 0
+    fi
+    case "$OUTPUT_MODE" in
+      hls) start_hls ;;
+      mjpeg) start_mjpeg ;;
+      rtsp) start_rtsp ;;
+      *) echo "Unsupported mode: $OUTPUT_MODE"; exit 1 ;;
+    esac
+    ;;
+  stop)
+    tmux kill-session -t "$SESSION" 2>/dev/null || true
+    tmux kill-session -t "${SESSION}_http" 2>/dev/null || true
+    fuser -k ${HLS_PORT}/tcp > /dev/null 2>&1 || true
+    rm -f "$FIFO"
+    echo "Stream stopped."
+    ;;
+  status)
+    if tmux has-session -t "$SESSION" 2>/dev/null; then
+      echo "✅  Video stream session ($SESSION) is running."
+    else
+      echo "❌  Video stream is not running."
+    fi
+    if tmux has-session -t "${SESSION}_http" 2>/dev/null; then
+      echo "✅  HTTP server is running."
+    else
+      echo "❌  HTTP server is not running."
+    fi
+    ;;
+  attach)
+    tmux attach -t "$SESSION"
+    ;;
+  log)
+    tail -f "$LOG_FILE"
+    ;;
+  *)
+    echo "Usage: streamctl {start|stop|status|attach|log} [hls|mjpeg|rtsp]"
+    ;;
+esac

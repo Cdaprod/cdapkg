@@ -1,0 +1,108 @@
+.TH CDAPKG 1 "April 2025" "cdaprod.dev" "Cdapkg Manual"
+
+.SH NAME
+cdapkg \- a modular CLI DevOps tool for managing scripts, environments, and Docker deployments
+
+.SH SYNOPSIS
+.B cdapkg
+[\fICOMMAND\fR] [\fIOPTIONS\fR]
+
+.SH DESCRIPTION
+\fBcdapkg\fR is a command-line interface designed to streamline system scripting, configuration, and environment management. It integrates a hierarchical script system with Docker deployments and volume-aware logic across environments.
+
+Use it to bootstrap development, configure containers, or deploy scripts across a host system.
+
+.SH COMMANDS
+.TP
+.B help
+Show general usage instructions.
+
+.TP
+.B list
+Enumerate all available tools or script modules installed.
+
+.TP
+.B search <keyword>
+Search tools by keyword name or tag from the installed toolset.
+
+.TP
+.B run <tool>
+Run a specific tool or script module from the repository.
+
+.TP
+.B version
+Show installed version and build info.
+
+.SH ENVIRONMENT
+.TP
+.B CDAPROD_HOME
+Root directory for installed toolset (e.g. /usr/local/share/cdapkg)
+
+.TP
+.B MANPATH
+The manpage path is appended automatically during install using a bootstrap script in /etc/profile.d/cdapkg.sh
+
+.SH FILES
+.TP
+.B /usr/local/bin/cdapkg
+Main CLI binary
+
+.TP
+.B /usr/local/share/cdapkg/
+All shared scripts, modules, and assets
+
+.TP
+.B /usr/local/etc/cdapkg/
+Host-specific configuration files
+
+.TP
+.B /usr/local/share/man/man1/cdapkg.1
+This manual page
+
+.TP
+.B /etc/profile.d/cdapkg.sh
+Bootstrap file to register manpath at login
+
+.SH MAKEFILE TARGETS
+.TP
+.B make help
+Print available targets and descriptions
+
+.TP
+.B make install
+Install cdapkg binary, manpage, and assets to system directories
+
+.TP
+.B make uninstall
+Remove all cdapkg assets and environment files
+
+.TP
+.B make reinstall
+Run uninstall and then install again
+
+.SH EXAMPLES
+Install:
+.EX
+make install
+.EE
+
+Run a tool:
+.EX
+cdapkg run setup-host
+.EE
+
+Search installed tools:
+.EX
+cdapkg search docker
+.EE
+
+.SH AUTHOR
+David Cannan (cdaprod.dev)
+
+.SH LICENSE
+MIT License
+
+.SH SEE ALSO
+.BR docker (1),
+.BR bash (1),
+.BR make (1)
