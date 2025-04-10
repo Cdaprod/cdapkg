@@ -10,7 +10,6 @@ BOOTSTRAP_SH := $(PROFILE_D)/cdapkg.sh
 
 CLI_BINARY   := ./bin/cdapkg
 MANPAGE_SRC  := ./share/man/cdapkg.1
-INSTALL_SH   := ./scripts/install.sh
 
 .PHONY: help install uninstall reinstall
 
@@ -27,16 +26,21 @@ install:
 	@echo "[*] Installing cdapkg CLI tool..."
 	@mkdir -p $(BIN_DIR) $(SHARE_DIR) $(MAN_DIR) $(ETC_DIR)
 	install -m 0755 $(CLI_BINARY) $(BIN_DIR)/cdapkg
+
+	@echo "[*] Copying shared assets..."
 	cp -rv ./share/* $(SHARE_DIR)/
+
 ifneq ("$(wildcard $(MANPAGE_SRC))","")
 	@echo "[*] Installing manpage..."
 	install -m 0644 $(MANPAGE_SRC) $(MAN_DIR)/cdapkg.1
 	mandb -q || true
 endif
+
 ifneq ("$(wildcard ./etc/*)","")
 	@echo "[*] Installing configs..."
 	cp -rv ./etc/* $(ETC_DIR)/
 endif
+
 	@echo "[*] Setting up environment bootstrap..."
 	@mkdir -p $(PROFILE_D)
 	@echo '#!/usr/bin/env bash' > $(BOOTSTRAP_SH)
@@ -45,7 +49,8 @@ endif
 	@echo '  export MANPATH="$$manpath:$$MANPATH"' >> $(BOOTSTRAP_SH)
 	@echo 'fi' >> $(BOOTSTRAP_SH)
 	@chmod +x $(BOOTSTRAP_SH)
-	@echo "[+] cdapkg installed."
+
+	@echo "[+] cdapkg installed successfully!"
 
 uninstall:
 	@echo "[*] Uninstalling cdapkg..."

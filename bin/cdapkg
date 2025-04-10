@@ -2,35 +2,84 @@
 
 set -euo pipefail
 export CDAPROD_HOME="/usr/local/cdaprod"
+
+# Source environment and utility functions
 source "$CDAPROD_HOME/init.d/00_env.sh"
+source "$CDAPROD_HOME/lib/colors.sh"
+source "$CDAPROD_HOME/lib/utils.sh"
 
 function usage() {
-  echo "cdapkg: bootstrap and manage the Cdaprod ecosystem"
-  echo "Usage: cdapkg <command>"
+  echo -e "${CYAN}${BOLD}cdapkg: bootstrap and manage the Cdaprod ecosystem${NC}"
   echo
-  echo "Commands:"
+  echo -e "${YELLOW}Usage:${NC} cdapkg <command>"
+  echo
+  echo -e "${GREEN}Commands:${NC}"
   echo "  init           Initialize all tools and symlinks"
   echo "  install NAME   Install a specific tool (repocate, cdaprodctl, etc)"
   echo "  list           List all installed and managed tools"
   echo "  status         Show system-level status of toolchain"
+  echo "  version        Shows cdapkg version"
+  echo "  lock           Export manifest of tool versions"
+  echo "  doctor         Run a system-level sanity check"
   echo "  motd           Show system message and ecosystem health"
   echo
 }
 
 case "${1:-}" in
+  
   init)
     for f in "$CDAPROD_HOME/init.d/"*.sh; do bash "$f"; done
     ;;
+  
   install)
     shift
     TOOL="$1"
-    echo "Installing $TOOL..."
-    git clone "https://github.com/Cdaprod/$TOOL" "$CDAPROD_HOME/tools/$TOOL"
-    make -C "$CDAPROD_HOME/tools/$TOOL" install
+    DEST="$CDAPROD_HOME/tools/$TOOL"
+    echo "[*] Installing tool: $TOOL..."
+    
+    # Clone or update repository
+    if [ -d "$DEST" ]; then
+      echo "[*] Tool directory exists. Updating repository..."
+      if ! git -C "$DEST" pull; then
+        echo "[!] Failed to update $TOOL repository."
+        exit 1
+      fi
+    else
+      if ! git clone "https://github.com/Cdaprod/$TOOL" "$DEST"; then
+        echo "[!] Failed to clone repository for $TOOL."
+        exit 1
+      fi
+    fi
+
+    # Detect an install method: use Makefile if available,
+    # otherwise check for an executable with the tool's name.
+    if [ -f "$DEST/Makefile" ]; then
+      echo "[*] Found Makefile. Running 'make install' for $TOOL..."
+      if ! make -C "$DEST" install; then
+        echo "[!] 'make install' failed for $TOOL."
+        exit 1
+      fi
+    elif [ -x "$DEST/$TOOL" ]; then
+      echo "[*] No Makefile detected, but an executable was found."
+      echo "[*] Creating symlink for $TOOL..."
+      if ! ln -sf "$DEST/$TOOL" "/usr/local/cdaprod/bin/$TOOL"; then
+        echo "[!] Failed to create symlink for $TOOL."
+        exit 1
+      fi
+    else
+      echo "[!] No recognized install method found for $TOOL."
+      echo "    Please ensure that the repository contains either a Makefile"
+      echo "    with an install target or an executable file named '$TOOL'."
+      exit 1
+    fi
+
+    echo "[+] $TOOL installation complete."
     ;;
+  
   list)
     find "$CDAPROD_HOME/bin" -type l
     ;;
+  
   search)
     if [[ "$2" == "--all" ]]; then
       echo "[*] Listing everything..."
@@ -40,13 +89,57 @@ case "${1:-}" in
       find "$CDAPROD_HOME/tools" -type d -name "*$2*" || echo "No match found."
     fi
     ;;
+  
   status)
     echo "Cdaprod Ecosystem Installed Tools:"
     tree "$CDAPROD_HOME/tools"
     ;;
+  
   version)
     echo "cdapkg $(git -C "$CDAPROD_HOME" rev-parse --short HEAD 2>/dev/null || echo 'unknown')"
     ;;
+  
+  lock)
+    MANIFEST="$CDAPROD_HOME/manifest.txt"
+    echo "[*] Generating manifest of installed tools..."
+    echo "Tool Manifest generated on $(date)" > "$MANIFEST"
+    for tool in "$CDAPROD_HOME/tools/"*/; do
+      TOOLNAME=$(basename "$tool")
+      if [ -d "$tool/.git" ]; then
+          REV=$(git -C "$tool" rev-parse --short HEAD)
+          echo "$TOOLNAME: $REV" >> "$MANIFEST"
+      else
+          echo "$TOOLNAME: (no git info)" >> "$MANIFEST"
+      fi
+    done
+    echo "[+] Manifest written to $MANIFEST"
+    ;;
+  
+  doctor)
+    echo "[*] Running system integrity check for cdapkg..."
+    echo "[*] Checking ownership of $CDAPROD_HOME..."
+    ls -ld "$CDAPROD_HOME"
+    
+    echo "[*] Ensuring $CDAPROD_HOME/bin is in PATH..."
+    if echo "$PATH" | grep -q "$CDAPROD_HOME/bin"; then
+      echo "[+] $CDAPROD_HOME/bin is in PATH."
+    else
+      echo "[!] $CDAPROD_HOME/bin is not in PATH."
+    fi
+    
+    echo "[*] Checking docker group membership for ${SUDO_USER:-$USER}..."
+    if id -nG "${SUDO_USER:-$USER}" | grep -qw docker; then
+      echo "[+] User is a member of the docker group."
+    else
+      echo "[!] User is not a member of the docker group."
+    fi
+    
+    echo "[*] Listing installed tools in $CDAPROD_HOME/tools..."
+    tree "$CDAPROD_HOME/tools" || echo "[!] No installed tools found."
+    
+    echo "[+] Doctor check complete."
+    ;;
+
   motd)
     bash "$CDAPROD_HOME/init.d/99_motd.sh"
     ;;
